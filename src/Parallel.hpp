@@ -16,15 +16,15 @@
 #ifndef __PARALLEL_PARALLEL_HPP_
 #define __PARALLEL_PARALLEL_HPP_
 
-#include"mpi.h"
-
 #include<string>
+#include<memory>
+#include<cstdio>
+
+class MPIComm;
 
 class Parallel {
 public:
    // Information
-   inline MPI_Comm comm() const { return _comm; }
-
    inline int rank() const { return _rank; }
 
    inline int size() const { return _size; }
@@ -67,14 +67,14 @@ public:
    T getUniformLoad(const T) const;
 
    // Constructors, destructors, assignment operator
-   inline Parallel(const MPI_Comm comm= MPI_COMM_WORLD,
-                   const int master= 0);
+   inline Parallel(const int master= 0,
+                   const int includeMe= -1);
    inline Parallel(const Parallel &);
    inline ~Parallel();
    inline Parallel &operator=(const Parallel &);
 
 private:
-   MPI_Comm _comm;
+   std::unique_ptr<const MPIComm> _comm;
    int _rank;
    int _size;
    int _master;

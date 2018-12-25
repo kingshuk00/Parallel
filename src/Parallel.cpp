@@ -18,6 +18,7 @@
 #include"mpi.h"
 
 #include<string>
+#include<new>
 #include<cstdio>
 #include<cstdarg>
 
@@ -29,7 +30,7 @@ struct MPIType
    inline operator MPI_Datatype() { return mpiType; }
    inline MPIType();
 };
-#define CPP_MPI_TYPE(CPPT,MPIT)     \
+#define CPP_MPI_TYPE(CPPT,MPIT)                 \
    template<>                                   \
    MPIType<CPPT>::MPIType() : mpiType(MPIT) {}
 CPP_MPI_TYPE(unsigned char,MPI_UNSIGNED_CHAR)
@@ -46,7 +47,7 @@ CPP_MPI_TYPE(double,MPI_DOUBLE)
 
 // returns zero for success, non-zero for failure
 static int
-MpiCall(const int val, bool verbose= true)
+_MpiCall(const int val, bool verbose= true)
 {
    bool ret= false;
    switch(val) {
@@ -75,11 +76,71 @@ MpiCall(const int val, bool verbose= true)
    return ret;
 }
 
+// idea: <https://computing.llnl.gov/tutorials/mpi/#Group_Management_Routines>
+class MPIComm {
+public:
+   MPIComm(const int includeMe)
+      : _comm(MPI_COMM_NULL)
+   {
+      MPI_Comm world= MPI_COMM_WORLD;
+      if(-1== includeMe) {
+         _comm= world;
+         return;
+      }
+      int size;
+      _MpiCall(MPI_Comm_size(world, &size));
+      int *included= new int[size];
+      _MpiCall(MPI_Allgather(&includeMe, 1, MPI_INT,
+                             &included, 1, MPI_INT,
+                             world));
+      if(0!= includeMe) {
+         int count= 0;
+         for(int i= 0; i< size; ++i) {
+            if(0!= included[i]) { included[count++]= i; }
+         }
+         MPI_Group  worldGroup, newGroup;
+         _MpiCall(MPI_Comm_group(world, &worldGroup));
+         _MpiCall(MPI_Group_incl(worldGroup, count, included, &newGroup));
+         _MpiCall(MPI_Comm_create(world, newGroup, &_comm));
+      }
+      delete[] included; included= 0;
+   }
+
+   inline MPIComm()
+      : _comm(MPI_COMM_WORLD)
+   {
+   }
+
+   inline MPIComm(const MPIComm &right)
+      : _comm(MPI_COMM_NULL)
+   {
+      if(MPI_COMM_WORLD== right._comm) { _comm= MPI_COMM_WORLD; }
+      else { _MpiCall(MPI_Comm_dup(right._comm, &_comm)); }
+   }
+
+   inline MPIComm &operator=(const MPIComm &right)
+   {
+      if(MPI_COMM_WORLD== right._comm) { _comm= MPI_COMM_WORLD; }
+      else { _MpiCall(MPI_Comm_dup(right._comm, &_comm)); }
+      return *this;
+   }
+
+   inline operator MPI_Comm() const { return _comm; }
+
+   ~MPIComm()
+   {
+      if(MPI_COMM_WORLD!= _comm) { MPI_Comm_free(&_comm); }
+   }
+
+private:
+   MPI_Comm _comm;
+};  // class MPIComm;
+
 template<typename T>
 void
 Parallel::broadcast(T *const data, const int count) const
 {
-   if(MpiCall(MPI_Bcast(data, count, MPIType<T>(), master(), comm()))) {
+   if(_MpiCall(MPI_Bcast(data, count, MPIType<T>(), master(), *_comm))) {
       // do some destructive thing
    }
 }
@@ -91,9 +152,9 @@ Parallel::gather(const T *const send,
                  const int count,
                  const int root) const
 {
-   if(MpiCall(MPI_Gather(send, count, MPIType<T>(),
+   if(_MpiCall(MPI_Gather(send, count, MPIType<T>(),
                          recv, count, MPIType<T>(),
-                         root, comm()))) {
+                         root, *_comm))) {
       // do some destructive thing
    }
 }
@@ -105,9 +166,9 @@ Parallel::scatter(const T *const send,
                   const int count,
                   const int root) const
 {
-   if(MpiCall(MPI_Scatter(send, count, MPIType<T>(),
+   if(_MpiCall(MPI_Scatter(send, count, MPIType<T>(),
                           recv, count, MPIType<T>(),
-                          root, comm()))) {
+                          root, *_comm))) {
       // do some destructive thing
    }
 }
@@ -118,8 +179,8 @@ Parallel::send(const T *const buf,
                const int dest,
                const int count) const
 {
-   if(MpiCall(MPI_Send(buf, count, MPIType<T>(),
-                       dest, rank(), comm()))) {
+   if(_MpiCall(MPI_Send(buf, count, MPIType<T>(),
+                       dest, rank(), *_comm))) {
       // do some destructive thing
    }
 }
@@ -131,8 +192,8 @@ Parallel::recv(T *const buf,
                const int count) const
 {
    MPI_Status status;
-   if(MpiCall(MPI_Recv(buf, count, MPIType<T>(),
-                       source, source, comm(), &status))) {
+   if(_MpiCall(MPI_Recv(buf, count, MPIType<T>(),
+                       source, source, *_comm, &status))) {
       // do some destructive thing
    }
 }
@@ -221,7 +282,7 @@ static int
 _getRank(const MPI_Comm comm)
 {
    int rank= -1;
-   if(MpiCall(MPI_Comm_rank(comm, &rank))) { rank= -1; }
+   if(_MpiCall(MPI_Comm_rank(comm, &rank))) { rank= -1; }
    return rank;
 }
 
@@ -229,18 +290,20 @@ static int
 _getSize(const MPI_Comm comm)
 {
    int size= -1;
-   if(MpiCall(MPI_Comm_size(comm, &size))) { size= -1; }
+   if(_MpiCall(MPI_Comm_size(comm, &size))) { size= -1; }
    return size;
 }
 
-Parallel::Parallel(const MPI_Comm comm,
-                   const int master)
-   : _comm(comm), _rank(_getRank(comm)), _size(_getSize(comm)), _master(master)
+Parallel::Parallel(const int master,
+                   const int includeMe)
+   : _comm(new MPIComm(includeMe)), _rank(_getRank(*_comm)),
+     _size(_getSize(*_comm)), _master(master)
 {
+   
 }
 
 Parallel::Parallel(const Parallel &right)
-   : _comm(right._comm), _rank(right._rank), _size(right._size),
+   : _comm(new MPIComm(*(right._comm))), _rank(right._rank), _size(right._size),
      _master(right._master)
 {
 }
@@ -252,7 +315,7 @@ Parallel::~Parallel()
 Parallel &
 Parallel::operator=(const Parallel &right)
 {
-   _comm= right._comm;
+   _comm.reset(new MPIComm(*(right._comm)));
    _rank= right._rank;
    _size= right._size;
    _master= right._master;
