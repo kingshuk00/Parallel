@@ -36,7 +36,7 @@ homedir= os.environ['HOME']
 env.Append(LIBPATH= [os.path.join(homedir, 'usr/lib')])
 env.Append(CPPPATH= [os.path.join(homedir, 'usr/include')])
 
-env.BuildDir('build', 'src', duplicate=0)
+env.VariantDir('build', 'src', duplicate=0)
 
 lib= env.SharedLibrary(target='build/parallel',
                        source=['build/Parallel.cpp'],
