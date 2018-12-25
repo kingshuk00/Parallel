@@ -19,6 +19,7 @@
 
 #include<string>
 #include<cstdio>
+#include<cstdarg>
 
 // idea: <http://blog.jholewinski.org/the-beauty-of-c-templates/index.html>
 template<typename T>
@@ -78,18 +79,71 @@ template<typename T>
 void
 Parallel::broadcast(T *const data, const int count) const
 {
-   if(MpiCall(MPI_Bcast(data, count, MPIType<T>(), getRoot(), getComm()))) {
+   if(MpiCall(MPI_Bcast(data, count, MPIType<T>(), master(), comm()))) {
+      // do some destructive thing
+   }
+}
+
+template<typename T>
+void
+Parallel::gather(const T *const send,
+                 T *const recv,
+                 const int count,
+                 const int root) const
+{
+   if(MpiCall(MPI_Gather(send, count, MPIType<T>(),
+                         recv, count, MPIType<T>(),
+                         root, comm()))) {
+      // do some destructive thing
+   }
+}
+
+template<typename T>
+void
+Parallel::scatter(const T *const send,
+                  T *const recv,
+                  const int count,
+                  const int root) const
+{
+   if(MpiCall(MPI_Scatter(send, count, MPIType<T>(),
+                          recv, count, MPIType<T>(),
+                          root, comm()))) {
+      // do some destructive thing
+   }
+}
+
+template<typename T>
+void
+Parallel::send(const T *const buf,
+               const int dest,
+               const int count) const
+{
+   if(MpiCall(MPI_Send(buf, count, MPIType<T>(),
+                       dest, rank(), comm()))) {
+      // do some destructive thing
+   }
+}
+
+template<typename T>
+void
+Parallel::recv(T *const buf,
+               const int source,
+               const int count) const
+{
+   MPI_Status status;
+   if(MpiCall(MPI_Recv(buf, count, MPIType<T>(),
+                       source, source, comm(), &status))) {
       // do some destructive thing
    }
 }
 
 bool
-Parallel::openFileAtRoot(const std::string &fileName,
-                         const std::string &mode,
-                         FILE **const fp) const
+Parallel::openFile(const std::string &fileName,
+                   const std::string &mode,
+                   FILE **const fp) const
 {
    int goodFile= 0;
-   if(isRoot()) {
+   if(isMaster()) {
       *fp= fopen(fileName.c_str(), mode.c_str());
       goodFile= 0!= (*fp)? 1: 0;
    }
@@ -98,15 +152,59 @@ Parallel::openFileAtRoot(const std::string &fileName,
 }
 
 bool
-Parallel::closeFileAtRoot(FILE **const fp) const
+Parallel::closeFile(FILE **const fp) const
 {
    int goodClose= 0;
-   if(isRoot()&& (*fp)) {
+   if(isMaster()&& (*fp)) {
       goodClose= fclose(*fp);
       if(0== goodClose) { *fp= 0; }
    }
    broadcast(&goodClose);
    return 0== goodClose? true: false;
+}
+
+template<typename T>
+int
+Parallel::pfscanf(FILE *fp, const char *const format, T *const ptr) const
+{
+   int ret= 0;
+   if(isMaster()) {
+      if(NULL!= fp) {
+         ret= fscanf(fp, format, ptr);
+      } else {
+         ret= 0;
+      }
+   }
+   broadcast(&ret);
+   if(1!= ret|| NULL== ptr) { goto bye; }
+   broadcast(ptr);
+bye:
+   return ret;
+}
+
+template<typename T>
+int
+Parallel::pfscanfMaster(FILE *fp, const char *const format, T *const ptr) const
+{
+   int ret= 0;
+   if(!isMaster()|| NULL== fp|| NULL== ptr) { goto bye; }
+   ret= fscanf(fp, format, ptr);
+bye:
+   return ret;
+}
+
+int
+Parallel::pprintfMaster(const char *const format, ...) const
+{
+   int ret= 0;
+   if(!isMaster()) { goto bye; }
+   va_list vl;
+   va_start(vl,format);
+   ret= vprintf(format,vl);
+   va_end(vl);
+
+bye:
+   return ret;
 }
 
 template <typename T>
@@ -120,7 +218,7 @@ Parallel::getUniformLoad(const T count) const
 }
 
 static int
-_GetRank(const MPI_Comm comm)
+_getRank(const MPI_Comm comm)
 {
    int rank= -1;
    if(MpiCall(MPI_Comm_rank(comm, &rank))) { rank= -1; }
@@ -128,7 +226,7 @@ _GetRank(const MPI_Comm comm)
 }
 
 static int
-_GetSize(const MPI_Comm comm)
+_getSize(const MPI_Comm comm)
 {
    int size= -1;
    if(MpiCall(MPI_Comm_size(comm, &size))) { size= -1; }
@@ -136,14 +234,14 @@ _GetSize(const MPI_Comm comm)
 }
 
 Parallel::Parallel(const MPI_Comm comm,
-                   const int root)
-   : _comm(comm), _rank(_GetRank(comm)), _size(_GetSize(comm)), _root(root)
+                   const int master)
+   : _comm(comm), _rank(_getRank(comm)), _size(_getSize(comm)), _master(master)
 {
 }
 
 Parallel::Parallel(const Parallel &right)
    : _comm(right._comm), _rank(right._rank), _size(right._size),
-     _root(right._root)
+     _master(right._master)
 {
 }
 
@@ -157,6 +255,6 @@ Parallel::operator=(const Parallel &right)
    _comm= right._comm;
    _rank= right._rank;
    _size= right._size;
-   _root= right._root;
+   _master= right._master;
    return *this;
 }

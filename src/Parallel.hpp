@@ -23,26 +23,44 @@
 class Parallel {
 public:
    // Information
-   inline MPI_Comm getComm() const { return _comm; }
+   inline MPI_Comm comm() const { return _comm; }
 
-   inline int getRank() const { return _rank; }
+   inline int rank() const { return _rank; }
 
-   inline int getSize() const { return _size; }
+   inline int size() const { return _size; }
 
-   inline int getRoot() const { return _root; }
+   inline int master() const { return _master; }
 
-   inline bool isRoot() const { return _root== _rank; }
+   inline bool isMaster() const { return _master== _rank; }
 
-   // Utility
-   // communication
+   // Communication
+
+   // broadcast
    template<typename T>
    void broadcast(T *const, const int= 1) const;
 
-   // file
-   bool openFileAtRoot(const std::string &,
-                       const std::string &,
-                       FILE **const) const;
-   bool closeFileAtRoot(FILE **const) const;
+   // gather & scatter
+   template<typename T>
+   void gather(const T *const, T *const, const int= 1, const int= 0) const;
+   template<typename T>
+   void scatter(const T *const, T *const, const int= 1, const int= 0) const;
+
+   // send & recv
+   template<typename T>
+   void send(const T *const, const int, const int= 1) const;
+   template<typename T>
+   void recv(T *const, const int, const int= 1) const;
+
+   // file, I/O
+   bool openFile(const std::string &,
+                 const std::string &,
+                 FILE **const) const;
+   bool closeFile(FILE **const) const;
+   template<typename T>
+   int pfscanf(FILE *, const char *const, T *const) const;
+   template<typename T>
+   int pfscanfMaster(FILE *, const char *const, T *const) const;
+   int pprintfMaster(const char *const, ...) const;
 
    // calculation
    template <typename T>
@@ -50,7 +68,7 @@ public:
 
    // Constructors, destructors, assignment operator
    inline Parallel(const MPI_Comm comm= MPI_COMM_WORLD,
-                   const int root= 0);
+                   const int master= 0);
    inline Parallel(const Parallel &);
    inline ~Parallel();
    inline Parallel &operator=(const Parallel &);
@@ -59,7 +77,7 @@ private:
    MPI_Comm _comm;
    int _rank;
    int _size;
-   int _root;
+   int _master;
 };  // Parallel
 
 #endif  // __PARALLEL_PARALLEL HPP_
