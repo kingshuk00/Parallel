@@ -175,8 +175,8 @@ Parallel::scatter(const T *const send,
 
 template<typename T>
 void
-Parallel::send(const T *const buf,
-               const int dest,
+Parallel::send(const int dest,
+               const T *const buf,
                const int count) const
 {
    if(_MpiCall(MPI_Send(buf, count, MPIType<T>(),
@@ -187,8 +187,8 @@ Parallel::send(const T *const buf,
 
 template<typename T>
 void
-Parallel::recv(T *const buf,
-               const int source,
+Parallel::recv(const int source,
+               T *const buf,
                const int count) const
 {
    MPI_Status status;
@@ -261,10 +261,36 @@ Parallel::pprintfMaster(const char *const format, ...) const
    if(!isMaster()) { goto bye; }
    va_list vl;
    va_start(vl,format);
-   ret= vprintf(format,vl);
+   ret= vprintf(format, vl);
    va_end(vl);
 
 bye:
+   return ret;
+}
+
+int
+Parallel::pprintf(const char *const format, ...) const
+{
+   char buf[2048]= { '\0' };
+   va_list vl;
+   va_start(vl,format);
+   int ret= vsnprintf(buf, 2048, format, vl);
+   va_end(vl);
+   ret= std::min(ret, 2047);
+   if(isMaster()) {
+      for(int ip= 0; ip< size(); ++ip) {
+         if(!isMaster(ip)) {
+            int count= 0;
+            recv(ip, &count);
+            recv(ip, &buf[0], count);
+            buf[count]= '\0';
+         }
+         printf("(%d): %s\n", ip, buf);
+      }
+   } else {
+      send(master(), &ret);
+      send(master(), &buf[0], ret);
+   }
    return ret;
 }
 

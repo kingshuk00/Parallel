@@ -32,6 +32,7 @@ public:
    inline int master() const { return _master; }
 
    inline bool isMaster() const { return _master== _rank; }
+   inline bool isMaster(const int rank) const { return _master== rank; }
 
    // Communication
 
@@ -47,9 +48,9 @@ public:
 
    // send & recv
    template<typename T>
-   void send(const T *const, const int, const int= 1) const;
+   void send(const int dest, const T *const, const int count= 1) const;
    template<typename T>
-   void recv(T *const, const int, const int= 1) const;
+   void recv(const int source, T *const, const int count= 1) const;
 
    // file, I/O
    bool openFile(const std::string &,
@@ -60,6 +61,7 @@ public:
    int pfscanf(FILE *, const char *const, T *const) const;
    template<typename T>
    int pfscanfMaster(FILE *, const char *const, T *const) const;
+   int pprintf(const char *consr, ...) const;
    int pprintfMaster(const char *const, ...) const;
 
    // calculation
