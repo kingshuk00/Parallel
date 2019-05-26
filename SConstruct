@@ -21,7 +21,7 @@ env= Environment()
 
 debug= ARGUMENTS.get("debug", 0)
 
-env['CPPFLAGS']= ['-Wall', '-Werror']
+env['CPPFLAGS']= ['-Wall', '-Werror', '-D_GLIBCXX_USE_CXX11_ABI=0', '-Wl,--no-undefined']
 
 if debug== 0:
     env.Append(CPPFLAGS= '-O3')
@@ -40,6 +40,7 @@ env.VariantDir('build', 'src', duplicate=0)
 
 lib= env.SharedLibrary(target='build/parallel',
                        source=['build/Parallel.cpp'],
+                       CPPFLAGS=env['CPPFLAGS'],
                        LIBS=['pthread', 'mpi']
 )
 

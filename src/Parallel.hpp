@@ -58,10 +58,13 @@ public:
                  FILE **const) const;
    bool closeFile(FILE **const) const;
    template<typename T>
+   int pscanf(const char *const, T *const) const;
+   int pfscanf(FILE *, const char *const) const;
+   template<typename T>
    int pfscanf(FILE *, const char *const, T *const) const;
    template<typename T>
    int pfscanfMaster(FILE *, const char *const, T *const) const;
-   int pprintf(const char *consr, ...) const;
+   int pprintf(const char *const, ...) const;
    int pprintfMaster(const char *const, ...) const;
 
    // calculation
@@ -69,11 +72,11 @@ public:
    T getUniformLoad(const T) const;
 
    // Constructors, destructors, assignment operator
-   inline Parallel(const int master= 0,
-                   const int includeMe= -1);
-   inline Parallel(const Parallel &);
-   inline ~Parallel();
-   inline Parallel &operator=(const Parallel &);
+   Parallel(const int master= 0,
+            const int includeMe= -1);
+   Parallel(const Parallel &);
+   ~Parallel();
+   Parallel &operator=(const Parallel &);
 
 private:
    std::unique_ptr<const MPIComm> _comm;
