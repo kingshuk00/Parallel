@@ -49,10 +49,10 @@ CPP_MPI_TYPE(double,MPI_DOUBLE)
 static int
 _MpiCall(const int val, bool verbose= true)
 {
-   bool ret= false;
+   int ret= 1;
    switch(val) {
    case MPI_SUCCESS:
-      ret= true;
+      ret= 0;
       break;
    case MPI_ERR_COMM:
       printf("Invalid communicator\n");
@@ -226,21 +226,39 @@ Parallel::closeFile(FILE **const fp) const
 
 template<typename T>
 int
-Parallel::pfscanf(FILE *fp, const char *const format, T *const ptr) const
+Parallel::pscanf(const char *const format, T *const ptr) const
 {
    int ret= 0;
    if(isMaster()) {
-      if(NULL!= fp) {
-         ret= fscanf(fp, format, ptr);
-      } else {
-         ret= 0;
-      }
+      ret= scanf(format, ptr);
    }
    broadcast(&ret);
    if(1!= ret|| NULL== ptr) { goto bye; }
    broadcast(ptr);
 bye:
    return ret;
+}
+
+template<typename T>
+int
+Parallel::pfscanf(FILE *fp, const char *const format, T *const ptr) const
+{
+   int ret= 0;
+   if(isMaster()) {
+      if(NULL!= fp) { ret= fscanf(fp, format, ptr); }
+      else { ret= 0; }
+   }
+   broadcast(&ret);
+   if(1!= ret|| NULL== ptr) { goto bye; }
+   broadcast(ptr);
+bye:
+   return ret;
+}
+
+int
+Parallel::pfscanf(FILE *fp, const char *const format) const
+{
+   return pfscanf<int>(fp, format, 0);
 }
 
 template<typename T>
@@ -325,7 +343,6 @@ Parallel::Parallel(const int master,
    : _comm(new MPIComm(includeMe)), _rank(_getRank(*_comm)),
      _size(_getSize(*_comm)), _master(master)
 {
-   
 }
 
 Parallel::Parallel(const Parallel &right)
@@ -347,3 +364,109 @@ Parallel::operator=(const Parallel &right)
    _master= right._master;
    return *this;
 }
+
+
+#define CPP_BROADCAST(T)                                        \
+   template void Parallel::broadcast<T>(T *const, const int) const
+CPP_BROADCAST(unsigned char);
+CPP_BROADCAST(char);
+CPP_BROADCAST(unsigned short int);
+CPP_BROADCAST(short int);
+CPP_BROADCAST(unsigned int);
+CPP_BROADCAST(int);
+CPP_BROADCAST(unsigned long long int);
+CPP_BROADCAST(long long int);
+CPP_BROADCAST(float);
+CPP_BROADCAST(double);
+
+#define CPP_GATHER(T)                                                   \
+   template void Parallel::gather<T>(const T*const, T *const, const int, const int) const
+CPP_GATHER(unsigned char);
+CPP_GATHER(char);
+CPP_GATHER(unsigned short int);
+CPP_GATHER(short int);
+CPP_GATHER(unsigned int);
+CPP_GATHER(int);
+CPP_GATHER(unsigned long long int);
+CPP_GATHER(long long int);
+CPP_GATHER(float);
+CPP_GATHER(double);
+
+#define CPP_SCATTER(T)                          \
+   template void Parallel::scatter<T>(const T *const, T *const, const int, const int) const
+CPP_SCATTER(unsigned char);
+CPP_SCATTER(char);
+CPP_SCATTER(unsigned short int);
+CPP_SCATTER(short int);
+CPP_SCATTER(unsigned int);
+CPP_SCATTER(int);
+CPP_SCATTER(unsigned long long int);
+CPP_SCATTER(long long int);
+CPP_SCATTER(float);
+CPP_SCATTER(double);
+
+#define CPP_SEND(T)                                                     \
+   template void Parallel::send(const int, const T *const, const int) const
+CPP_SEND(unsigned char);
+CPP_SEND(char);
+CPP_SEND(unsigned short int);
+CPP_SEND(short int);
+CPP_SEND(unsigned int);
+CPP_SEND(int);
+CPP_SEND(unsigned long long int);
+CPP_SEND(long long int);
+CPP_SEND(float);
+CPP_SEND(double);
+
+#define CPP_RECV(T)                                                 \
+   template void Parallel::recv(const int, T *const, const int) const
+CPP_RECV(unsigned char);
+CPP_RECV(char);
+CPP_RECV(unsigned short int);
+CPP_RECV(short int);
+CPP_RECV(unsigned int);
+CPP_RECV(int);
+CPP_RECV(unsigned long long int);
+CPP_RECV(long long int);
+CPP_RECV(float);
+CPP_RECV(double);
+
+#define CPP_PSCANF(T)                                           \
+   template int Parallel::pscanf(const char *const, T *const) const
+CPP_PSCANF(unsigned char);
+CPP_PSCANF(char);
+CPP_PSCANF(unsigned short int);
+CPP_PSCANF(short int);
+CPP_PSCANF(unsigned int);
+CPP_PSCANF(int);
+CPP_PSCANF(unsigned long long int);
+CPP_PSCANF(long long int);
+CPP_PSCANF(float);
+CPP_PSCANF(double);
+
+#define CPP_PFSCANF(T)                          \
+   template int Parallel::pfscanf(FILE *, const char *const, T *const) const;
+CPP_PFSCANF(unsigned char);
+CPP_PFSCANF(char);
+CPP_PFSCANF(unsigned short int);
+CPP_PFSCANF(short int);
+CPP_PFSCANF(unsigned int);
+CPP_PFSCANF(int);
+CPP_PFSCANF(unsigned long long int);
+CPP_PFSCANF(long long int);
+CPP_PFSCANF(float);
+CPP_PFSCANF(double);
+
+#define CPP_PFSCANF_MASTER(T)                   \
+   template int Parallel::pfscanfMaster(FILE *, const char *const, T *const) const;
+CPP_PFSCANF_MASTER(unsigned char);
+CPP_PFSCANF_MASTER(char);
+CPP_PFSCANF_MASTER(unsigned short int);
+CPP_PFSCANF_MASTER(short int);
+CPP_PFSCANF_MASTER(unsigned int);
+CPP_PFSCANF_MASTER(int);
+CPP_PFSCANF_MASTER(unsigned long long int);
+CPP_PFSCANF_MASTER(long long int);
+CPP_PFSCANF_MASTER(float);
+CPP_PFSCANF_MASTER(double);
+
